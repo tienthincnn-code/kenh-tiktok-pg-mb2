@@ -1,0 +1,42 @@
+name: Quet TikTok PG
+
+on:
+  schedule:
+    - cron: '0 23 * * *'   # 23:00 UTC = 6h sang gio Viet Nam, moi ngay
+  workflow_dispatch:       # bam "Run workflow" de chay tay
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quet-tiktok
+  cancel-in-progress: false
+
+jobs:
+  quet:
+    # Mac dinh: may cua GitHub (mien phi voi repo cong khai).
+    # Bi TikTok chan nhieu -> dat bien MAY_CHAY = self-hosted va cai runner tren 1 may tinh cua khu vuc.
+    runs-on: ${{ vars.MAY_CHAY || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cai yt-dlp
+        run: pip install -U yt-dlp && yt-dlp --version
+      - name: Quet TikTok
+        env:
+          TAI_KHOAN_CSV_URL: ${{ secrets.TAI_KHOAN_CSV_URL }}
+        run: node scripts/quet-tiktok.mjs
+      - name: Ghi ket qua vao repo
+        run: |
+          git config user.name "robot-tiktok"
+          git config user.email "robot-tiktok@users.noreply.github.com"
+          git add data/ket-qua.json
+          git diff --cached --quiet && { echo "Khong co gi moi"; exit 0; }
+          git commit -m "robot: cap nhat so TikTok $(date -u +%F)"
+          git pull --rebase origin ${{ github.ref_name }} && git push
